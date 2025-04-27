@@ -1,15 +1,15 @@
 pub const HavokValueTypes = enum(u32) {
-    empty = 0,
-    byte = 1,
-    int = 2,
-    real = 3,
-    vec4 = 4,
-    vec8 = 5,
-    vec12 = 6,
-    vec16 = 7,
-    object = 8,
-    @"struct" = 9,
-    string = 10,
+    empty = 0x0,
+    byte = 0x1,
+    int = 0x2,
+    real = 0x3,
+    vec4 = 0x4,
+    vec8 = 0x5,
+    vec12 = 0x6,
+    vec16 = 0x7,
+    object = 0x8,
+    @"struct" = 0x9,
+    string = 0xA,
 
     array = 0x10,
     array_byte = 0x11,
@@ -38,6 +38,14 @@ pub const HavokValueTypes = enum(u32) {
     pub fn getBaseType(self: HavokValueTypes) HavokValueTypes {
         const value = @intFromEnum(self);
         const mask = 0x0F;
+        const base_value = value & mask;
+
+        return @enumFromInt(base_value);
+    }
+
+    pub fn getSpecializedType(self: HavokValueTypes) HavokValueTypes {
+        const value = @intFromEnum(self);
+        const mask = 0xF0;
         const base_value = value & mask;
 
         return @enumFromInt(base_value);

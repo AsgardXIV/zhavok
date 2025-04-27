@@ -40,6 +40,18 @@ pub fn init(allocator: Allocator, htf: *HavokTagFile) !*HavokObjectType {
     return htt;
 }
 
+pub fn fake(allocator: Allocator, name: []const u8) !*HavokObjectType {
+    const htt = try allocator.create(HavokObjectType);
+    htt.* = .{
+        .allocator = allocator,
+        .name = name,
+        .version = 0,
+        .parent = 0,
+        .members = .{},
+    };
+    return htt;
+}
+
 pub fn deinit(htt: *HavokObjectType) void {
     htt.cleanupMembers();
     htt.allocator.destroy(htt);
