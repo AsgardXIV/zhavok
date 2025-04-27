@@ -1,5 +1,5 @@
-pub const HavokValueTypes = enum(u32) {
-    empty = 0x0,
+pub const TagValueTypes = enum(u32) {
+    void = 0x0,
     byte = 0x1,
     int = 0x2,
     real = 0x3,
@@ -35,7 +35,15 @@ pub const HavokValueTypes = enum(u32) {
     tuple_struct = 0x29,
     tuple_string = 0x2a,
 
-    pub fn getBaseType(self: HavokValueTypes) HavokValueTypes {
+    pub fn getBaseType(self: TagValueTypes) TagValueTypes {
+        const value = @intFromEnum(self);
+        const mask = 0xF0;
+        const base_value = value & mask;
+
+        return @enumFromInt(base_value);
+    }
+
+    pub fn getSpecializedType(self: TagValueTypes) TagValueTypes {
         const value = @intFromEnum(self);
         const mask = 0x0F;
         const base_value = value & mask;
@@ -43,11 +51,11 @@ pub const HavokValueTypes = enum(u32) {
         return @enumFromInt(base_value);
     }
 
-    pub fn getSpecializedType(self: HavokValueTypes) HavokValueTypes {
-        const value = @intFromEnum(self);
-        const mask = 0xF0;
-        const base_value = value & mask;
+    pub fn isArray(self: TagValueTypes) bool {
+        return self.getBaseType() == TagValueTypes.array;
+    }
 
-        return @enumFromInt(base_value);
+    pub fn isTuple(self: TagValueTypes) bool {
+        return self.getBaseType() == TagValueTypes.tuple;
     }
 };
