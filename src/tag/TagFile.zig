@@ -83,6 +83,7 @@ fn parse(htf: *TagFile) !void {
         switch (section) {
             .file_info => {
                 try htf.populateDefaultStrings();
+                try htf.populateDefaultTypes();
 
                 const version = try htf.readPackedInt(i32);
 
