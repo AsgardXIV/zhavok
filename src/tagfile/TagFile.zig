@@ -167,19 +167,48 @@ fn parseField(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMemberInfo)
             .entries = .{},
         };
         errdefer tf.cleanupArray(&array);
-        try array.entries.ensureTotalCapacity(tf.allocator, size);
+        try array.entries.ensureTotalCapacityPrecise(tf.allocator, size);
 
         try tf.parseArray(tfv, member_info, &array);
+
+        tfv.* = TagFileValue{
+            .array = array,
+        };
     } else {
-        try tf.parseFieldValue(tfv, member_info, -1);
+        try tf.parseFieldValue(tfv, member_info.type.getElementType(), member_info.class_name, -1);
     }
 }
 
-fn parseFieldValue(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMemberInfo, array_prefix: i32) Error!void {
-    _ = tf;
-    _ = tfv;
-    _ = member_info;
+fn parseFieldValue(tf: *TagFile, tfv: *TagFileValue, value_type: TagFileValueType, class_name: ?[]const u8, array_prefix: i32) Error!void {
     _ = array_prefix;
+    _ = class_name;
+
+    switch (value_type) {
+        .byte => {
+            tfv.* = TagFileValue{
+                .byte = tf.reader.readByte() catch return Error.ReadError,
+            };
+        },
+        .int => {
+            tfv.* = TagFileValue{
+                .int = try tf.readPackedInt(i32),
+            };
+        },
+        .string => {
+            tfv.* = TagFileValue{
+                .string = try tf.readString(),
+            };
+        },
+        .object => {
+            tfv.* = TagFileValue{
+                .object = try tf.readPackedInt(i32),
+            };
+        },
+        else => {
+            @breakpoint();
+            return Error.ReadError;
+        },
+    }
 }
 
 fn parseArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMemberInfo, array: *TagFileValue.Array) Error!void {
@@ -193,8 +222,11 @@ fn parseArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMemberInfo,
     switch (element_type) {
         .@"struct" => try tf.parseStructArray(tfv, member_info, array),
         else => {
-            // TODO: Loop
-            try tf.parseFieldValue(tfv, member_info, prefix);
+            for (0..array.entries.capacity) |_| {
+                var result: TagFileValue = undefined;
+                try tf.parseFieldValue(&result, member_info.type.getElementType(), member_info.class_name, prefix);
+                try array.entries.append(tf.allocator, result);
+            }
         },
     }
 }
@@ -212,9 +244,30 @@ fn parseStructArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMembe
     try tf.readBitfield(member_present);
 
     const type_info = &tf.remembered_types.items[@intCast(class_index)];
-    _ = tfv;
-    _ = type_info;
-    _ = array;
+
+    for (0..member_count) |index| {
+        if (member_present[index] == false) {
+            continue;
+        }
+
+        const target_member_info_req = tf.calculateMemberInfoByIndex(type_info, index, null);
+        if (target_member_info_req == null) {
+            return Error.IndexNotFound;
+        }
+        const target_member_info = target_member_info_req.?;
+
+        var tmp_array: TagFileValue.Array = .{
+            .entries = .{},
+        };
+        defer tmp_array.entries.deinit(tf.allocator);
+        try tmp_array.entries.ensureTotalCapacityPrecise(tf.allocator, member_count);
+
+        try tf.parseArray(tfv, target_member_info, &tmp_array);
+
+        for (tmp_array.entries.items) |*tmp_entry| {
+            try array.entries.append(tf.allocator, tmp_entry.*);
+        }
+    }
 }
 
 fn readFileInfo(tf: *TagFile) Error!void {
@@ -237,7 +290,7 @@ fn readTypeInfo(tf: *TagFile) Error!TagFileTypeInfo {
 
     var members = std.ArrayListUnmanaged(TagFileMemberInfo){};
     errdefer members.deinit(tf.allocator);
-    try members.ensureTotalCapacity(tf.allocator, member_count);
+    try members.ensureTotalCapacityPrecise(tf.allocator, member_count);
 
     for (0..member_count) |_| {
         const member_info = try tf.readMemberInfo();
@@ -290,7 +343,7 @@ fn readPackedInt(tf: *TagFile, comptime ReadAs: type) Error!ReadAs {
     const reader = &tf.reader;
 
     var byte = reader.readByte() catch return Error.ReadError;
-    var result: i32 = ((byte & 0x7f) >> 1);
+    var result: i32 = ((byte & 0x7e) >> 1);
     const is_negative = byte & 0x1 != 0;
     var shift: u32 = 6;
 
@@ -331,6 +384,27 @@ fn calculateTotalMembers(tf: *TagFile, class_index: i32) usize {
     }
 
     return count;
+}
+
+fn calculateMemberInfoByIndex(tf: *TagFile, type_info: *TagFileTypeInfo, target_index: usize, current_index: ?*usize) ?*TagFileMemberInfo {
+    var storage: usize = 0;
+
+    const internal_index: *usize = if (current_index) |ci| ci else &storage;
+
+    if (type_info.parent_type_index != 0) {
+        const result = tf.calculateMemberInfoByIndex(&tf.remembered_types.items[@intCast(type_info.parent_type_index)], target_index, internal_index);
+        if (result) |ret| {
+            return ret;
+        }
+    }
+
+    if (target_index - internal_index.* < type_info.members.items.len) {
+        return &type_info.members.items[target_index - internal_index.*];
+    } else {
+        internal_index.* += type_info.members.items.len;
+    }
+
+    return null;
 }
 
 fn getClassIndexFromName(tf: *TagFile, name: []const u8) Error!i32 {
