@@ -35,27 +35,27 @@ pub const TagValueTypes = enum(u32) {
     tuple_struct = 0x29,
     tuple_string = 0x2a,
 
-    pub fn getBaseType(self: TagValueTypes) TagValueTypes {
+    pub fn getContainerType(self: TagValueTypes) TagValueTypes {
         const value = @intFromEnum(self);
         const mask = 0xF0;
-        const base_value = value & mask;
+        const masked_value = value & mask;
 
-        return @enumFromInt(base_value);
+        return @enumFromInt(masked_value);
     }
 
-    pub fn getSpecializedType(self: TagValueTypes) TagValueTypes {
+    pub fn getValueType(self: TagValueTypes) TagValueTypes {
         const value = @intFromEnum(self);
         const mask = 0x0F;
-        const base_value = value & mask;
+        const masked_value = value & mask;
 
-        return @enumFromInt(base_value);
+        return @enumFromInt(masked_value);
     }
 
     pub fn isArray(self: TagValueTypes) bool {
-        return self.getBaseType() == TagValueTypes.array;
+        return self.getContainerType() == TagValueTypes.array;
     }
 
     pub fn isTuple(self: TagValueTypes) bool {
-        return self.getBaseType() == TagValueTypes.tuple;
+        return self.getContainerType() == TagValueTypes.tuple;
     }
 };

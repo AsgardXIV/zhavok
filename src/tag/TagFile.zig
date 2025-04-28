@@ -160,6 +160,16 @@ pub fn readBitfield(htf: *TagFile, bits: []bool) !void {
     }
 }
 
+pub fn findTypeIndex(htf: *TagFile, name: []const u8) !i32 {
+    for (htf.remembered_types.items, 0..) |*type_info, i| {
+        if (std.mem.eql(u8, type_info.name, name)) {
+            return @intCast(i);
+        }
+    }
+
+    return error.TypeNotFound;
+}
+
 fn populateDefaultStrings(htf: *TagFile) !void {
     htf.cleanupStrings();
 

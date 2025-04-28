@@ -18,8 +18,8 @@ pub fn createFromStream(tf: *TagFile) !TagFileMemberInfo {
 
     const tuple_size = if (@"type".isTuple()) try tf.readPackedInt(i32) else null;
 
-    const spec_type = @"type".getSpecializedType();
-    const class_name = if (spec_type == .@"struct" or spec_type == .object) try tf.readString() else null;
+    const value_type = @"type".getValueType();
+    const class_name = if (value_type == .@"struct" or value_type == .object) try tf.readString() else null;
 
     return .{
         .name = name,
