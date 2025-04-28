@@ -1,4 +1,4 @@
-pub const TagValueTypes = enum(u32) {
+pub const TagFileValueType = enum(u32) {
     void = 0x0,
     byte = 0x1,
     int = 0x2,
@@ -35,7 +35,9 @@ pub const TagValueTypes = enum(u32) {
     tuple_struct = 0x29,
     tuple_string = 0x2a,
 
-    pub fn getContainerType(self: TagValueTypes) TagValueTypes {
+    _,
+
+    pub fn getContainerType(self: TagFileValueType) TagFileValueType {
         const value = @intFromEnum(self);
         const mask = 0xF0;
         const masked_value = value & mask;
@@ -43,7 +45,7 @@ pub const TagValueTypes = enum(u32) {
         return @enumFromInt(masked_value);
     }
 
-    pub fn getValueType(self: TagValueTypes) TagValueTypes {
+    pub fn getElementType(self: TagFileValueType) TagFileValueType {
         const value = @intFromEnum(self);
         const mask = 0x0F;
         const masked_value = value & mask;
@@ -51,11 +53,15 @@ pub const TagValueTypes = enum(u32) {
         return @enumFromInt(masked_value);
     }
 
-    pub fn isArray(self: TagValueTypes) bool {
-        return self.getContainerType() == TagValueTypes.array;
+    pub fn isSizedContainer(self: TagFileValueType) bool {
+        return self.isArray() or self.isTuple();
     }
 
-    pub fn isTuple(self: TagValueTypes) bool {
-        return self.getContainerType() == TagValueTypes.tuple;
+    pub fn isArray(self: TagFileValueType) bool {
+        return self.getContainerType() == TagFileValueType.array;
+    }
+
+    pub fn isTuple(self: TagFileValueType) bool {
+        return self.getContainerType() == TagFileValueType.tuple;
     }
 };
