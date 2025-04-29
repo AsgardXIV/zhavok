@@ -1,7 +1,7 @@
 # zhavok
 zhavok is a pure Zig library for parsing Havok tag files.
 
-It is currently very WIP.
+It is currently very WIP and not ready to use.
 
 ## Acknowledgements
 zhavok is mostly based on the work of [hkxparse](https://github.com/exyorha/hkxparse). See the license section below for more information.
