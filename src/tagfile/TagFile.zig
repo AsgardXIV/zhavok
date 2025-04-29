@@ -21,6 +21,7 @@ pub const Error = error{
     InvalidStruct,
     IndexNotFound,
     InvalidVector,
+    CouldNotResolveObject,
 };
 
 const expected_magic_1: u32 = 0xCAB00D1E;
@@ -99,6 +100,7 @@ fn parse(tf: *TagFile) Error!void {
             .file_info => {
                 try tf.populateDefaultStrings();
                 try tf.populateDefaultTypes();
+                try tf.populateDefaultObjects();
                 try tf.readFileInfo();
             },
             .type_info => {
@@ -118,14 +120,27 @@ fn parse(tf: *TagFile) Error!void {
             },
         }
     }
+
+    for (tf.remembered_objects.items) |*object| {
+        try tf.populateStructObjectReferences(object);
+    }
+}
+
+pub fn getRootObject(tf: *TagFile) Error!TagFileStruct {
+    if (tf.remembered_objects.items.len <= 2) {
+        return Error.InvalidStruct;
+    }
+
+    return tf.remembered_objects.items[1];
 }
 
 fn readStruct(tf: *TagFile, class_index: ?i32) Error!TagFileStruct {
     // Read the class index if needed
     const resolved_class_index = if (class_index) |ci| ci else tf.readPackedInt(i32) catch return Error.InvalidStruct;
+    const type_info = &tf.remembered_types.items[@intCast(resolved_class_index)];
 
     var tfs = TagFileStruct{
-        .class_index = resolved_class_index,
+        .type_info = type_info,
         .fields = .{},
     };
 
@@ -244,7 +259,10 @@ fn parseFieldValue(tf: *TagFile, tfv: *TagFileValue, value_type: TagFileValueTyp
         },
         .object => {
             tfv.* = TagFileValue{
-                .object = try tf.readPackedInt(i32),
+                .object = .{
+                    .object_id = try tf.readPackedInt(i32),
+                    .resolved = undefined,
+                },
             };
         },
         .@"struct" => {
@@ -307,7 +325,7 @@ fn parseStructArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMembe
     for (0..array.entries.capacity) |_| {
         array.entries.appendAssumeCapacity(.{
             .@"struct" = .{
-                .class_index = class_index,
+                .type_info = type_info,
                 .fields = .{},
             },
         });
@@ -444,6 +462,51 @@ fn readBitfield(tf: *TagFile, bits: []bool) Error!void {
     }
 }
 
+fn populateStructObjectReferences(tf: *TagFile, object: *TagFileStruct) Error!void {
+    var iter = object.fields.iterator();
+    while (iter.next()) |field| {
+        if (field.value_ptr.* == .object) {
+            const object_id = field.value_ptr.object.object_id;
+
+            if (object_id < 0) {
+                return Error.CouldNotResolveObject;
+            }
+            if (tf.remembered_objects.items.len <= object_id) {
+                return Error.CouldNotResolveObject;
+            }
+
+            const resolved_object = &tf.remembered_objects.items[@intCast(object_id)];
+            field.value_ptr.object.resolved = resolved_object;
+        } else if (field.value_ptr.* == .@"struct") {
+            try tf.populateStructObjectReferences(&field.value_ptr.@"struct");
+        } else if (field.value_ptr.* == .array) {
+            try tf.populateArrayObjectReferences(&field.value_ptr.array);
+        }
+    }
+}
+
+fn populateArrayObjectReferences(tf: *TagFile, array: *TagFileValue.Array) Error!void {
+    for (array.entries.items) |*entry| {
+        if (entry.* == .object) {
+            const object_id = entry.*.object.object_id;
+
+            if (object_id < 0) {
+                return Error.CouldNotResolveObject;
+            }
+            if (tf.remembered_objects.items.len <= object_id) {
+                return Error.CouldNotResolveObject;
+            }
+
+            const resolved_object = &tf.remembered_objects.items[@intCast(object_id)];
+            entry.*.object.resolved = resolved_object;
+        } else if (entry.* == .@"struct") {
+            try tf.populateStructObjectReferences(&entry.*.@"struct");
+        } else if (entry.* == .array) {
+            try tf.populateArrayObjectReferences(&entry.*.array);
+        }
+    }
+}
+
 fn calculateTotalMembers(tf: *TagFile, class_index: i32) usize {
     var count: usize = 0;
     var current_index = class_index;
@@ -532,6 +595,15 @@ fn cleanupTypes(tf: *TagFile) void {
     tf.remembered_types = .{};
 }
 
+fn populateDefaultObjects(tf: *TagFile) Error!void {
+    tf.cleanupObjects();
+
+    try tf.remembered_objects.append(tf.allocator, .{
+        .type_info = &tf.remembered_types.items[0],
+        .fields = .{},
+    });
+}
+
 fn cleanupObjects(tf: *TagFile) void {
     for (tf.remembered_objects.items) |*object| {
         tf.cleanupStruct(object);
@@ -563,7 +635,7 @@ fn cleanupArray(tf: *TagFile, array: *TagFileValue.Array) void {
     array.entries.deinit(tf.allocator);
 }
 
-test "test.tag" {
+test "test skeleton" {
     const allocator = std.testing.allocator;
 
     const file = try std.fs.cwd().openFile("resources/test.tag", .{ .mode = .read_only });
@@ -574,4 +646,8 @@ test "test.tag" {
 
     const tf = try TagFile.init(allocator, file_data);
     defer tf.deinit();
+
+    const root = try tf.getRootObject();
+
+    try std.testing.expectEqualStrings("hkRootLevelContainer", root.type_info.name);
 }

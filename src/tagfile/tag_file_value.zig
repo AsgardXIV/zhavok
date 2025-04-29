@@ -7,13 +7,18 @@ pub const TagFileValue = union(enum) {
     int: i32,
     real: f32,
     array: Array,
-    object: i32,
+    object: Object,
     string: []const u8,
     @"struct": TagFileStruct,
     vec4: Vec4,
     vec8: Vec8,
     vec12: Vec12,
     vec16: Vec16,
+
+    pub const Object = struct {
+        object_id: i32,
+        resolved: *TagFileStruct,
+    };
 
     pub const Array = struct {
         entries: std.ArrayListUnmanaged(TagFileValue) = .{},

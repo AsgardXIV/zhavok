@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const TagFileValue = @import("tag_file_value.zig").TagFileValue;
+const TagFileTypeInfo = @import("TagFileTypeInfo.zig");
 
-class_index: i32,
+type_info: *TagFileTypeInfo,
 fields: std.AutoArrayHashMapUnmanaged(usize, TagFileValue),
