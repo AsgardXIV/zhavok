@@ -651,3 +651,20 @@ test "test skeleton" {
 
     try std.testing.expectEqualStrings("hkRootLevelContainer", root.type_info.name);
 }
+
+test "test animation" {
+    const allocator = std.testing.allocator;
+
+    const file = try std.fs.cwd().openFile("resources/animation.tag", .{ .mode = .read_only });
+    defer file.close();
+
+    const file_data = try file.readToEndAlloc(allocator, 1 << 20);
+    defer allocator.free(file_data);
+
+    const tf = try TagFile.init(allocator, file_data);
+    defer tf.deinit();
+
+    const root = try tf.getRootObject();
+
+    try std.testing.expectEqualStrings("hkRootLevelContainer", root.type_info.name);
+}
