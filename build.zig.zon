@@ -7,8 +7,13 @@
     .dependencies = .{},
 
     .paths = .{
+        ".gitignore",
+        ".gitattributes",
         "build.zig",
         "build.zig.zon",
         "src",
+        "resources",
+        "LICENSE",
+        "THIRD_PARTY_LICENSES.md",
     },
 }

@@ -638,7 +638,7 @@ fn cleanupArray(tf: *TagFile, array: *TagFileValue.Array) void {
 test "test skeleton" {
     const allocator = std.testing.allocator;
 
-    const file = try std.fs.cwd().openFile("resources/test.tag", .{ .mode = .read_only });
+    const file = try std.fs.cwd().openFile("resources/skeleton.tag", .{ .mode = .read_only });
     defer file.close();
 
     const file_data = try file.readToEndAlloc(allocator, 1 << 20);
