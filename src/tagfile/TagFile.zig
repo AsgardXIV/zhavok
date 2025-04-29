@@ -20,6 +20,7 @@ pub const Error = error{
     UnsupportedVersion,
     InvalidStruct,
     IndexNotFound,
+    InvalidVector,
 };
 
 const expected_magic_1: u32 = 0xCAB00D1E;
@@ -91,7 +92,7 @@ fn parse(tf: *TagFile) Error!void {
     }
 
     // Now we can read the sections
-    while (true) section_loop: {
+    section_loop: while (true) {
         const section = try tf.readPackedInt(TagFileSection);
 
         switch (section) {
@@ -108,9 +109,13 @@ fn parse(tf: *TagFile) Error!void {
                 const object = try tf.readStruct(null);
                 try tf.remembered_objects.append(tf.allocator, object);
             },
-            .file_end => break :section_loop,
+            .file_end => {
+                break :section_loop;
+            },
 
-            else => return Error.InvalidSection,
+            else => {
+                return Error.InvalidSection;
+            },
         }
     }
 }
@@ -121,6 +126,7 @@ fn readStruct(tf: *TagFile, class_index: ?i32) Error!TagFileStruct {
 
     var tfs = TagFileStruct{
         .class_index = resolved_class_index,
+        .fields = .{},
     };
 
     // Calculate the members
@@ -153,6 +159,8 @@ fn parseStructMembers(tf: *TagFile, tfs: *TagFileStruct, class_index: i32, bitma
         // We only need to parse the member if it is present
         if (bitmap[member_index.*]) {
             try tf.parseField(&value, member_info);
+
+            try tfs.fields.put(tf.allocator, member_index.*, value);
         }
 
         // Keep track of the overall member index
@@ -180,9 +188,6 @@ fn parseField(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMemberInfo)
 }
 
 fn parseFieldValue(tf: *TagFile, tfv: *TagFileValue, value_type: TagFileValueType, class_name: ?[]const u8, array_prefix: i32) Error!void {
-    _ = array_prefix;
-    _ = class_name;
-
     switch (value_type) {
         .byte => {
             tfv.* = TagFileValue{
@@ -194,14 +199,68 @@ fn parseFieldValue(tf: *TagFile, tfv: *TagFileValue, value_type: TagFileValueTyp
                 .int = try tf.readPackedInt(i32),
             };
         },
-        .string => {
+        .real => {
+            const raw = tf.reader.readInt(u32, .little) catch return Error.ReadError;
             tfv.* = TagFileValue{
-                .string = try tf.readString(),
+                .real = @bitCast(raw),
+            };
+        },
+        .vec4 => {
+            const final_prefix: usize = if (array_prefix < 0) 4 else @intCast(array_prefix);
+            if (final_prefix < 1 or final_prefix > 4) {
+                @branchHint(.unlikely);
+                return Error.InvalidVector;
+            }
+
+            var vec_components: [4]f32 = @splat(0.0);
+            for (0..final_prefix) |i| {
+                const raw = tf.reader.readInt(u32, .little) catch return Error.ReadError;
+                vec_components[i] = @bitCast(raw);
+            }
+
+            tfv.* = .{
+                .vec4 = .{
+                    .x = vec_components[0],
+                    .y = vec_components[1],
+                    .z = vec_components[2],
+                    .w = vec_components[3],
+                },
+            };
+        },
+        .vec8 => {
+            tfv.* = TagFileValue{
+                .vec8 = tf.reader.readStruct(TagFileValue.Vec8) catch return Error.ReadError,
+            };
+        },
+        .vec12 => {
+            tfv.* = TagFileValue{
+                .vec12 = tf.reader.readStruct(TagFileValue.Vec12) catch return Error.ReadError,
+            };
+        },
+        .vec16 => {
+            tfv.* = TagFileValue{
+                .vec16 = tf.reader.readStruct(TagFileValue.Vec16) catch return Error.ReadError,
             };
         },
         .object => {
             tfv.* = TagFileValue{
                 .object = try tf.readPackedInt(i32),
+            };
+        },
+        .@"struct" => {
+            if (class_name) |name| {
+                const class_index = try tf.getClassIndexFromName(name);
+                const value = try tf.readStruct(class_index);
+                tfv.* = .{
+                    .@"struct" = value,
+                };
+            } else {
+                return Error.InvalidStruct;
+            }
+        },
+        .string => {
+            tfv.* = TagFileValue{
+                .string = try tf.readString(),
             };
         },
         else => {
@@ -245,6 +304,15 @@ fn parseStructArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMembe
 
     const type_info = &tf.remembered_types.items[@intCast(class_index)];
 
+    for (0..array.entries.capacity) |_| {
+        array.entries.appendAssumeCapacity(.{
+            .@"struct" = .{
+                .class_index = class_index,
+                .fields = .{},
+            },
+        });
+    }
+
     for (0..member_count) |index| {
         if (member_present[index] == false) {
             continue;
@@ -260,12 +328,12 @@ fn parseStructArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMembe
             .entries = .{},
         };
         defer tmp_array.entries.deinit(tf.allocator);
-        try tmp_array.entries.ensureTotalCapacityPrecise(tf.allocator, member_count);
+        try tmp_array.entries.ensureTotalCapacityPrecise(tf.allocator, array.entries.capacity);
 
         try tf.parseArray(tfv, target_member_info, &tmp_array);
 
-        for (tmp_array.entries.items) |*tmp_entry| {
-            try array.entries.append(tf.allocator, tmp_entry.*);
+        for (tmp_array.entries.items, 0..) |*tmp_entry, i| {
+            try array.entries.items[i].@"struct".fields.put(tf.allocator, i, tmp_entry.*);
         }
     }
 }
@@ -365,11 +433,14 @@ fn readPackedInt(tf: *TagFile, comptime ReadAs: type) Error!ReadAs {
 }
 
 fn readBitfield(tf: *TagFile, bits: []bool) Error!void {
-    var bit_reader = std.io.bitReader(.little, tf.reader);
+    const bytes_needed = (bits.len + 7) / 8;
+    const bytes = try tf.allocator.alloc(u8, bytes_needed);
+    defer tf.allocator.free(bytes);
+
+    _ = tf.reader.readAll(bytes) catch return Error.ReadError;
 
     for (0..bits.len) |i| {
-        const result = bit_reader.readBitsNoEof(u1, 1) catch return Error.ReadError;
-        bits[i] = result != 0;
+        bits[i] = (bytes[i / 8] & (@as(u32, 1) << @as(u3, @intCast(i % 8)))) != 0;
     }
 }
 
@@ -462,12 +533,34 @@ fn cleanupTypes(tf: *TagFile) void {
 }
 
 fn cleanupObjects(tf: *TagFile) void {
+    for (tf.remembered_objects.items) |*object| {
+        tf.cleanupStruct(object);
+    }
     tf.remembered_objects.deinit(tf.allocator);
     tf.remembered_objects = .{};
 }
 
-fn cleanupArray(tg: *TagFile, array: *TagFileValue.Array) void {
-    array.entries.deinit(tg.allocator);
+fn cleanupStruct(tf: *TagFile, object: *TagFileStruct) void {
+    var it = object.fields.iterator();
+    while (it.next()) |field| {
+        if (field.value_ptr.* == .@"struct") {
+            tf.cleanupStruct(&field.value_ptr.@"struct");
+        } else if (field.value_ptr.* == .array) {
+            tf.cleanupArray(&field.value_ptr.array);
+        }
+    }
+    object.fields.deinit(tf.allocator);
+}
+
+fn cleanupArray(tf: *TagFile, array: *TagFileValue.Array) void {
+    for (array.entries.items) |*entry| {
+        if (entry.* == .@"struct") {
+            tf.cleanupStruct(&entry.*.@"struct");
+        } else if (entry.* == .array) {
+            tf.cleanupArray(&entry.*.array);
+        }
+    }
+    array.entries.deinit(tf.allocator);
 }
 
 test "test.tag" {
