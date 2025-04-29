@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const tag = @import("tag.zig");
+pub const tagfile = @import("tagfile.zig");
 
 test {
     std.testing.refAllDeclsRecursive(@This());
