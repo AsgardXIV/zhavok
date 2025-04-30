@@ -114,7 +114,6 @@ fn parse(tf: *TagFile) Error!void {
             .file_end => {
                 break :section_loop;
             },
-
             else => {
                 return Error.InvalidSection;
             },
@@ -351,7 +350,7 @@ fn parseStructArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMembe
         try tf.parseArray(tfv, target_member_info, &tmp_array);
 
         for (tmp_array.entries.items, 0..) |*tmp_entry, i| {
-            try array.entries.items[i].@"struct".fields.put(tf.allocator, i, tmp_entry.*);
+            try array.entries.items[i].@"struct".fields.put(tf.allocator, index, tmp_entry.*);
         }
     }
 }
