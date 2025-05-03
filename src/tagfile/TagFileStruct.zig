@@ -12,7 +12,7 @@ type_info: TypeInfoReference,
 fields: std.AutoArrayHashMapUnmanaged(usize, TagFileValue),
 
 pub fn getRawValueByName(tfs: *const TagFileStruct, name: []const u8) ?*TagFileValue {
-    const member_index = getMemberIndex(tfs.type_info, name, 0);
+    const member_index = getMemberIndex(tfs.type_info.resolved, name, 0);
     if (member_index) |mi| {
         const field = tfs.fields.getEntry(mi);
         if (field) |f| {
@@ -39,7 +39,7 @@ pub fn getValueByName(tfs: *const TagFileStruct, name: []const u8, comptime tag:
 
 fn getMemberIndex(ti: *TagFileTypeInfo, name: []const u8, count: usize) ?usize {
     if (ti.parent_type) |pt| {
-        const parent_index = getMemberIndex(pt, name, count);
+        const parent_index = getMemberIndex(pt.resolved, name, count);
         if (parent_index) |pi| {
             return count + pi;
         }
