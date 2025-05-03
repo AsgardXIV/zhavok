@@ -120,6 +120,12 @@ fn parse(tf: *TagFile) Error!void {
         }
     }
 
+    for (tf.remembered_types.items) |*type_info| {
+        if (type_info.parent_type_index != 0) {
+            type_info.parent_type = &tf.remembered_types.items[@intCast(type_info.parent_type_index)];
+        }
+    }
+
     for (tf.remembered_objects.items) |*object| {
         try tf.populateStructObjectReferences(object);
     }
@@ -167,14 +173,14 @@ fn parseStructMembers(tf: *TagFile, tfs: *TagFileStruct, class_index: i32, bitma
     }
 
     // Now we process each member
-    for (type_info.members.items) |*member_info| {
+    for (type_info.members.items, 0..) |*member_info, local_index| {
         var value: TagFileValue = undefined;
 
         // We only need to parse the member if it is present
         if (bitmap[member_index.*]) {
             try tf.parseField(&value, member_info);
 
-            try tfs.fields.put(tf.allocator, member_index.*, value);
+            try tfs.fields.put(tf.allocator, local_index, value);
         }
 
         // Keep track of the overall member index
@@ -386,6 +392,7 @@ fn readTypeInfo(tf: *TagFile) Error!TagFileTypeInfo {
         .name = name,
         ._unk3 = unk3,
         .parent_type_index = parent_type_index,
+        .parent_type = null,
         .members = members,
     };
 }
@@ -450,14 +457,10 @@ fn readPackedInt(tf: *TagFile, comptime ReadAs: type) Error!ReadAs {
 }
 
 fn readBitfield(tf: *TagFile, bits: []bool) Error!void {
-    const bytes_needed = (bits.len + 7) / 8;
-    const bytes = try tf.allocator.alloc(u8, bytes_needed);
-    defer tf.allocator.free(bytes);
-
-    _ = tf.reader.readAll(bytes) catch return Error.ReadError;
-
+    var br = std.io.bitReader(.little, tf.reader);
     for (0..bits.len) |i| {
-        bits[i] = (bytes[i / 8] & (@as(u32, 1) << @as(u3, @intCast(i % 8)))) != 0;
+        const val = br.readBitsNoEof(u1, 1) catch return Error.ReadError;
+        bits[i] = val != 0;
     }
 }
 
@@ -572,6 +575,7 @@ fn populateDefaultTypes(tf: *TagFile) Error!void {
         .name = "BuiltinVoidType",
         ._unk3 = 0,
         .parent_type_index = 0,
+        .parent_type = null,
         .members = .{},
     };
 
