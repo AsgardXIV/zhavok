@@ -15,6 +15,7 @@ pub const Error = error{
     InvalidFieldName,
     CustomDeserializeFailed,
     OutOfMemory,
+    NotImplemented,
 };
 
 pub fn populate(allocator: Allocator, target: anytype, source: anytype) Error!void {
@@ -54,15 +55,19 @@ pub fn populate(allocator: Allocator, target: anytype, source: anytype) Error!vo
                                 const ChildType = @typeInfo(TargetType.Slice).pointer.child;
 
                                 for (0..a.entries.items.len) |i| {
-                                    var value: ChildType = .{};
-                                    try populate(allocator, &value, &a.entries.items[i]);
-                                    try target.append(allocator, value);
+                                    var temp_value: ChildType = if (@typeInfo(ChildType) == .@"struct")
+                                        .{}
+                                    else
+                                        @as(ChildType, undefined);
+
+                                    try populate(allocator, &temp_value, &a.entries.items[i]);
+                                    try target.append(allocator, temp_value);
                                 }
                             }
                         }
                     },
                     .object => |*o| try populateStruct(allocator, target, o.resolved),
-                    else => return Error.InvalidStructType,
+                    else => try populateBasicValue(allocator, target, source),
                 }
             } else {
                 std.log.err("Invalid source type: {s}", .{@typeName(SourceType)});
@@ -126,11 +131,26 @@ fn populateBasicValue(allocator: Allocator, target: anytype, source: *TagFileVal
         .string => |*s| {
             if (tti == .pointer and tti.pointer.child == u8) {
                 target.* = try allocator.dupe(u8, s.*);
+            } else {
+                return Error.InvalidTargetType;
+            }
+        },
+        .int => |i| {
+            if (tti == .int) {
+                target.* = @intCast(i);
+            } else {
+                return Error.InvalidTargetType;
+            }
+        },
+        .vec12 => |v12| {
+            if (tti == .@"struct" and @hasDecl(TargetType, "fromVec12")) {
+                target.* = .fromVec12(v12);
+            } else {
+                return Error.InvalidTargetType;
             }
         },
         else => {
-            std.log.err("Invalid source type: {s}", .{@tagName(source.*)});
-            @breakpoint();
+            return Error.NotImplemented;
         },
     }
 }
