@@ -2,24 +2,21 @@ const std = @import("std");
 
 const TagFileStruct = @import("TagFileStruct.zig");
 
+const references = @import("references.zig");
+const ObjectReference = references.ObjectReference;
+
 pub const TagFileValue = union(enum) {
     byte: u8,
     int: i32,
     real: f32,
     array: Array,
-    object: Object,
+    object: ObjectReference,
     string: []const u8,
     @"struct": TagFileStruct,
     vec4: Vec4,
     vec8: Vec8,
     vec12: Vec12,
     vec16: Vec16,
-
-    pub const Object = struct {
-        object_id: i32,
-        resolved: *TagFileStruct,
-    };
-
     pub const Array = struct {
         entries: std.ArrayListUnmanaged(TagFileValue) = .{},
     };

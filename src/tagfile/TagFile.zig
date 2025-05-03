@@ -22,6 +22,7 @@ pub const Error = error{
     IndexNotFound,
     InvalidVector,
     CouldNotResolveObject,
+    CouldNotResolveType,
 };
 
 const expected_magic_1: u32 = 0xCAB00D1E;
@@ -120,12 +121,14 @@ fn parse(tf: *TagFile) Error!void {
         }
     }
 
+    // Resolve type parents
     for (tf.remembered_types.items) |*type_info| {
-        if (type_info.parent_type_index != 0) {
-            type_info.parent_type = &tf.remembered_types.items[@intCast(type_info.parent_type_index)];
+        if (type_info.parent_type) |*parent| {
+            try parent.resolve(tf);
         }
     }
 
+    // Resolve object references and type references
     for (tf.remembered_objects.items) |*object| {
         try tf.populateStructObjectReferences(object);
     }
@@ -142,10 +145,9 @@ pub fn getRootObject(tf: *TagFile) Error!TagFileStruct {
 fn readStruct(tf: *TagFile, class_index: ?i32) Error!TagFileStruct {
     // Read the class index if needed
     const resolved_class_index = if (class_index) |ci| ci else tf.readPackedInt(i32) catch return Error.InvalidStruct;
-    const type_info = &tf.remembered_types.items[@intCast(resolved_class_index)];
 
     var tfs = TagFileStruct{
-        .type_info = type_info,
+        .type_info = .{ .type_id = resolved_class_index },
         .fields = .{},
     };
 
@@ -168,8 +170,8 @@ fn parseStructMembers(tf: *TagFile, tfs: *TagFileStruct, class_index: i32, bitma
     const type_info = &tf.remembered_types.items[@intCast(class_index)];
 
     // Recurse into the parent type if needed
-    if (type_info.parent_type_index != 0) {
-        try tf.parseStructMembers(tfs, type_info.parent_type_index, bitmap, member_index);
+    if (type_info.parent_type) |pt| {
+        try tf.parseStructMembers(tfs, pt.type_id, bitmap, member_index);
     }
 
     // Now we process each member
@@ -330,7 +332,7 @@ fn parseStructArray(tf: *TagFile, tfv: *TagFileValue, member_info: *TagFileMembe
     for (0..array.entries.capacity) |_| {
         array.entries.appendAssumeCapacity(.{
             .@"struct" = .{
-                .type_info = type_info,
+                .type_info = .{ .type_id = class_index, .resolved = type_info },
                 .fields = .{},
             },
         });
@@ -391,8 +393,7 @@ fn readTypeInfo(tf: *TagFile) Error!TagFileTypeInfo {
     return .{
         .name = name,
         ._unk3 = unk3,
-        .parent_type_index = parent_type_index,
-        .parent_type = null,
+        .parent_type = if (parent_type_index == 0) null else .{ .type_id = parent_type_index },
         .members = members,
     };
 }
@@ -466,6 +467,7 @@ fn readBitfield(tf: *TagFile, bits: []bool) Error!void {
 
 fn populateStructObjectReferences(tf: *TagFile, object: *TagFileStruct) Error!void {
     var iter = object.fields.iterator();
+    try object.type_info.resolve(tf);
     while (iter.next()) |field| {
         if (field.value_ptr.* == .object) {
             const object_id = field.value_ptr.object.object_id;
@@ -490,17 +492,8 @@ fn populateStructObjectReferences(tf: *TagFile, object: *TagFileStruct) Error!vo
 fn populateArrayObjectReferences(tf: *TagFile, array: *TagFileValue.Array) Error!void {
     for (array.entries.items) |*entry| {
         if (entry.* == .object) {
-            const object_id = entry.*.object.object_id;
-
-            if (object_id < 0) {
-                return Error.CouldNotResolveObject;
-            }
-            if (tf.remembered_objects.items.len <= object_id) {
-                return Error.CouldNotResolveObject;
-            }
-
-            const resolved_object = &tf.remembered_objects.items[@intCast(object_id)];
-            entry.*.object.resolved = resolved_object;
+            try entry.*.object.resolve(tf);
+            try entry.*.object.resolved.type_info.resolve(tf);
         } else if (entry.* == .@"struct") {
             try tf.populateStructObjectReferences(&entry.*.@"struct");
         } else if (entry.* == .array) {
@@ -516,7 +509,12 @@ fn calculateTotalMembers(tf: *TagFile, class_index: i32) usize {
     while (current_index != 0) {
         const type_info = &tf.remembered_types.items[@intCast(current_index)];
         count += type_info.members.items.len;
-        current_index = type_info.parent_type_index;
+
+        if (type_info.parent_type) |pt| {
+            current_index = pt.type_id;
+        } else {
+            current_index = 0;
+        }
     }
 
     return count;
@@ -527,8 +525,8 @@ fn calculateMemberInfoByIndex(tf: *TagFile, type_info: *TagFileTypeInfo, target_
 
     const internal_index: *usize = if (current_index) |ci| ci else &storage;
 
-    if (type_info.parent_type_index != 0) {
-        const result = tf.calculateMemberInfoByIndex(&tf.remembered_types.items[@intCast(type_info.parent_type_index)], target_index, internal_index);
+    if (type_info.parent_type) |pt| {
+        const result = tf.calculateMemberInfoByIndex(&tf.remembered_types.items[@intCast(pt.type_id)], target_index, internal_index);
         if (result) |ret| {
             return ret;
         }
@@ -574,7 +572,6 @@ fn populateDefaultTypes(tf: *TagFile) Error!void {
     var tfi = TagFileTypeInfo{
         .name = "BuiltinVoidType",
         ._unk3 = 0,
-        .parent_type_index = 0,
         .parent_type = null,
         .members = .{},
     };
@@ -602,7 +599,7 @@ fn populateDefaultObjects(tf: *TagFile) Error!void {
     tf.cleanupObjects();
 
     try tf.remembered_objects.append(tf.allocator, .{
-        .type_info = &tf.remembered_types.items[0],
+        .type_info = .{ .type_id = 0 },
         .fields = .{},
     });
 }
@@ -652,7 +649,7 @@ test "test skeleton" {
 
     const root = try tf.getRootObject();
 
-    try std.testing.expectEqualStrings("hkRootLevelContainer", root.type_info.name);
+    try std.testing.expectEqualStrings("hkRootLevelContainer", root.type_info.resolved.name);
 }
 
 test "test animation" {
@@ -669,5 +666,5 @@ test "test animation" {
 
     const root = try tf.getRootObject();
 
-    try std.testing.expectEqualStrings("hkRootLevelContainer", root.type_info.name);
+    try std.testing.expectEqualStrings("hkRootLevelContainer", root.type_info.resolved.name);
 }

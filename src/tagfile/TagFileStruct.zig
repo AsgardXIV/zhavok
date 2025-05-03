@@ -3,9 +3,12 @@ const std = @import("std");
 const TagFileValue = @import("tag_file_value.zig").TagFileValue;
 const TagFileTypeInfo = @import("TagFileTypeInfo.zig");
 
+const references = @import("references.zig");
+const TypeInfoReference = references.TypeInfoReference;
+
 const TagFileStruct = @This();
 
-type_info: *TagFileTypeInfo,
+type_info: TypeInfoReference,
 fields: std.AutoArrayHashMapUnmanaged(usize, TagFileValue),
 
 pub fn getRawValueByName(tfs: *const TagFileStruct, name: []const u8) ?*TagFileValue {
