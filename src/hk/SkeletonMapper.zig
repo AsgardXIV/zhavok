@@ -7,7 +7,8 @@ const SkeletonMapper = @This();
 
 pub const havok_name = "hkaSkeletonMapper";
 
+mapping: SkeletonMapperData = undefined,
+
 pub fn deinit(skel_map: *SkeletonMapper, allocator: Allocator) void {
-    _ = skel_map;
-    _ = allocator;
+    skel_map.mapping.deinit(allocator);
 }

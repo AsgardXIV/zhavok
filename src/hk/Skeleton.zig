@@ -8,18 +8,18 @@ const Skeleton = @This();
 
 pub const havok_name = "hkaSkeleton";
 
-name: ?[]const u8 = null,
+name: []const u8 = undefined,
 parentIndices: std.ArrayListUnmanaged(i16) = .{},
 bones: std.ArrayListUnmanaged(Bone) = .{},
 referencePose: std.ArrayListUnmanaged(QsTransform) = .{},
 
 pub fn deinit(skel: *Skeleton, allocator: Allocator) void {
-    if (skel.name) |n| allocator.free(n);
+    allocator.free(skel.name);
 
     skel.parentIndices.deinit(allocator);
 
-    for (skel.bones.items) |*item| {
-        item.deinit(allocator);
+    for (skel.bones.items) |*bone| {
+        bone.deinit(allocator);
     }
     skel.bones.deinit(allocator);
 

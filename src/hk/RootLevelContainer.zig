@@ -1,16 +1,17 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const NamedVariant = @import("NamedVariant.zig");
 
-const RootLevelContainer = @This();
-
 pub const havok_name = "hkRootLevelContainer";
+
+const RootLevelContainer = @This();
 
 named_variants: std.ArrayListUnmanaged(NamedVariant) = .{},
 
-pub fn deinit(rlc: *RootLevelContainer, allocator: std.mem.Allocator) void {
-    for (rlc.named_variants.items) |*item| {
-        item.deinit(allocator);
+pub fn deinit(self: *RootLevelContainer, allocator: Allocator) void {
+    for (self.named_variants.items) |*variant| {
+        variant.deinit(allocator);
     }
-    rlc.named_variants.deinit(allocator);
+    self.named_variants.deinit(allocator);
 }
