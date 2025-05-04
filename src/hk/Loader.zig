@@ -8,6 +8,7 @@ const TagFileValue = @import("../tagfile/tag_file_value.zig").TagFileValue;
 const RootLevelContainer = @import("RootLevelContainer.zig");
 
 const Object = @import("object.zig").Object;
+const ObjectRef = @import("object_ref.zig").ObjectRef;
 
 const Loader = @This();
 
@@ -161,16 +162,8 @@ fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) !
 
     switch (source.*) {
         .object => |*o| {
-            if (tti == .pointer and tti.pointer.size == .one) {
-                if (tti.pointer.child == Object) {
-                    target.* = &loader.objects.items[@intCast(o.object_id)];
-                } else {
-                    const obj = &loader.objects.items[@intCast(o.object_id)];
-                    const ptr = obj.getPtr();
-                    if (ptr) |p| {
-                        target.* = @alignCast(@ptrCast(p));
-                    }
-                }
+            if (tti == .@"struct" and @hasField(TargetType, "object")) {
+                target.*.object = &loader.objects.items[@intCast(o.object_id)];
             } else {
                 return error.InvalidTargetType;
             }
