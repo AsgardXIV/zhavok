@@ -27,3 +27,10 @@ pub fn deinit(anim: *Animation, allocator: Allocator) void {
     _ = anim;
     _ = allocator;
 }
+
+pub fn as(anim: *Animation, comptime T: type) !*T {
+    if (anim.type != T.animation_type) {
+        return error.InvalidType;
+    }
+    return @ptrCast(anim);
+}

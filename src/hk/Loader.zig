@@ -273,6 +273,7 @@ fn zigNameToHavokName(allocator: Allocator, str: []const u8) Error![]const u8 {
 
 test "loader animation" {
     const AnimationContainer = @import("AnimationContainer.zig");
+    const SplineCompressedAnimation = @import("SplineCompressedAnimation.zig");
 
     const allocator = std.testing.allocator;
 
@@ -293,7 +294,9 @@ test "loader animation" {
     const container = try rlc.getObjectByType(AnimationContainer);
 
     const animation = container.animations.items[0];
-    _ = animation;
+
+    const spline_anim = try animation.as(SplineCompressedAnimation);
+    _ = spline_anim;
 }
 
 test "loader skeleton" {
