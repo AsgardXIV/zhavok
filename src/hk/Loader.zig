@@ -194,9 +194,18 @@ fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) E
                 return error.InvalidTargetType;
             }
         },
-        .int => |i| {
+        .int, .byte => |i| {
             if (tti == .int) {
                 target.* = @intCast(i);
+            } else if (tti == .bool) {
+                target.* = i != 0;
+            } else {
+                return error.InvalidTargetType;
+            }
+        },
+        .real => |r| {
+            if (tti == .float) {
+                target.* = @floatCast(r);
             } else {
                 return error.InvalidTargetType;
             }
