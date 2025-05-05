@@ -272,6 +272,8 @@ fn zigNameToHavokName(allocator: Allocator, str: []const u8) Error![]const u8 {
 }
 
 test "loader animation" {
+    const AnimationContainer = @import("AnimationContainer.zig");
+
     const allocator = std.testing.allocator;
 
     const file = try std.fs.cwd().openFile("resources/animation.tag", .{ .mode = .read_only });
@@ -287,10 +289,14 @@ test "loader animation" {
     defer loader.deinit();
 
     const rlc = try loader.loadFromTagFile(tf);
-    _ = rlc;
+
+    const container = try rlc.getObjectByType(AnimationContainer);
+    _ = container;
 }
 
 test "loader skeleton" {
+    const AnimationContainer = @import("AnimationContainer.zig");
+
     const allocator = std.testing.allocator;
 
     const file = try std.fs.cwd().openFile("resources/skeleton.tag", .{ .mode = .read_only });
@@ -306,5 +312,9 @@ test "loader skeleton" {
     defer loader.deinit();
 
     const rlc = try loader.loadFromTagFile(tf);
-    _ = rlc;
+
+    const container = try rlc.getObjectByType(AnimationContainer);
+
+    const skeleton = try container.findSkeletonByName("skeleton");
+    _ = skeleton;
 }

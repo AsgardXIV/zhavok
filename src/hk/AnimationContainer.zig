@@ -17,3 +17,12 @@ pub fn deinit(ac: *AnimationContainer, allocator: Allocator) void {
     ac.skeletons.deinit(allocator);
     ac.animations.deinit(allocator);
 }
+
+pub fn findSkeletonByName(ac: *AnimationContainer, name: []const u8) !*Skeleton {
+    for (ac.skeletons.items) |skel| {
+        if (std.mem.eql(u8, skel.name, name)) {
+            return skel;
+        }
+    }
+    return error.SkeletonNotFound;
+}
