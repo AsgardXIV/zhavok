@@ -8,19 +8,28 @@ const TagFileValue = @import("../tagfile/tag_file_value.zig").TagFileValue;
 const RootLevelContainer = @import("RootLevelContainer.zig");
 
 const Object = @import("object.zig").Object;
-const ObjectRef = @import("object_ref.zig").ObjectRef;
 
 const Loader = @This();
 
+pub const Error = error{
+    InvalidTagFile,
+    InvalidTargetType,
+    NotImplemented,
+    OutOfMemory,
+    UnresolvedObject,
+};
+
 allocator: Allocator,
 objects: std.ArrayListUnmanaged(Object),
+tf: *TagFile,
 
-pub fn init(allocator: Allocator) !*Loader {
+pub fn init(allocator: Allocator) Error!*Loader {
     const loader = try allocator.create(Loader);
 
     loader.* = .{
         .allocator = allocator,
         .objects = .{},
+        .tf = undefined,
     };
 
     return loader;
@@ -31,7 +40,7 @@ pub fn deinit(loader: *Loader) void {
     loader.allocator.destroy(loader);
 }
 
-pub fn loadFromTagFile(loader: *Loader, tf: *TagFile) !*RootLevelContainer {
+pub fn loadFromTagFile(loader: *Loader, tf: *TagFile) Error!*RootLevelContainer {
     try loader.populateFromTagFile(tf);
 
     for (loader.objects.items) |*object| {
@@ -43,7 +52,9 @@ pub fn loadFromTagFile(loader: *Loader, tf: *TagFile) !*RootLevelContainer {
     return error.InvalidTagFile;
 }
 
-fn populateFromTagFile(loader: *Loader, tf: *TagFile) !void {
+fn populateFromTagFile(loader: *Loader, tf: *TagFile) Error!void {
+    loader.tf = tf;
+
     const object_count = tf.remembered_objects.items.len;
     try loader.objects.ensureTotalCapacityPrecise(loader.allocator, object_count);
 
@@ -54,13 +65,11 @@ fn populateFromTagFile(loader: *Loader, tf: *TagFile) !void {
     }
 
     for (0..object_count) |i| {
-        const tfs = &tf.remembered_objects.items[i];
-        const object = &loader.objects.items[i];
-        try loader.populateObject(object, tfs);
+        _ = try loader.resolveObject(@intCast(i));
     }
 }
 
-fn populateObject(loader: *Loader, object: *Object, tfs: *TagFileStruct) !void {
+fn populateObject(loader: *Loader, object: *Object, tfs: *TagFileStruct) Error!void {
     const type_info = tfs.type_info.resolved;
     const type_name = type_info.name;
 
@@ -83,7 +92,7 @@ fn populateObject(loader: *Loader, object: *Object, tfs: *TagFileStruct) !void {
     }
 }
 
-fn populateStruct(loader: *Loader, data: anytype, tfs: *TagFileStruct) !void {
+fn populateStruct(loader: *Loader, data: anytype, tfs: *TagFileStruct) Error!void {
     const TargetType = @TypeOf(data);
     const target_type_info = @typeInfo(TargetType);
 
@@ -107,7 +116,7 @@ fn populateStruct(loader: *Loader, data: anytype, tfs: *TagFileStruct) !void {
     }
 }
 
-fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) !void {
+fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!void {
     const TargetType = @typeInfo(@TypeOf(target)).pointer.child;
     const SourceType = @typeInfo(@TypeOf(source)).pointer.child;
 
@@ -155,15 +164,25 @@ fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) !void 
     }
 }
 
-fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) !void {
+fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!void {
     const TargetType = @typeInfo(@TypeOf(target)).pointer.child;
 
     const tti = @typeInfo(TargetType);
 
     switch (source.*) {
         .object => |*o| {
+            const resolved_object = try loader.resolveObject(o.object_id);
+
             if (tti == .@"struct" and @hasField(TargetType, "object")) {
-                target.*.object = &loader.objects.items[@intCast(o.object_id)];
+                target.*.object = resolved_object;
+            } else if (tti == .@"union") {
+                target.* = resolved_object;
+            } else if (tti == .pointer and tti.pointer.size == .one) {
+                if (tti.pointer.child == Object) {
+                    target.* = resolved_object;
+                } else {
+                    target.* = @alignCast(@ptrCast(try resolved_object.getPtr()));
+                }
             } else {
                 return error.InvalidTargetType;
             }
@@ -195,6 +214,15 @@ fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) !
     }
 }
 
+fn resolveObject(loader: *Loader, object_id: i32) Error!*Object {
+    const obj = &loader.objects.items[@intCast(object_id)];
+    if (obj.* == .unresolved) {
+        const other = &loader.tf.remembered_objects.items[@intCast(object_id)];
+        try loader.populateObject(obj, other);
+    }
+    return obj;
+}
+
 fn cleanupObjects(loader: *Loader) void {
     for (loader.objects.items) |*object| {
         object.deinit(loader.allocator);
@@ -202,7 +230,7 @@ fn cleanupObjects(loader: *Loader) void {
     loader.objects.deinit(loader.allocator);
 }
 
-inline fn createObject(loader: *Loader, comptime T: type, tfs: *TagFileStruct) !*T {
+inline fn createObject(loader: *Loader, comptime T: type, tfs: *TagFileStruct) Error!*T {
     const new_obj = try loader.allocator.create(T);
     errdefer loader.allocator.destroy(new_obj);
     new_obj.* = .{};
@@ -210,7 +238,7 @@ inline fn createObject(loader: *Loader, comptime T: type, tfs: *TagFileStruct) !
     return new_obj;
 }
 
-fn zigNameToHavokName(allocator: Allocator, str: []const u8) ![]const u8 {
+fn zigNameToHavokName(allocator: Allocator, str: []const u8) Error![]const u8 {
     var buffer: std.ArrayListUnmanaged(u8) = .{};
     try buffer.ensureTotalCapacityPrecise(allocator, str.len);
     defer buffer.deinit(allocator);

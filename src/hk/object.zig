@@ -48,9 +48,9 @@ pub const Object = union(enum) {
         }
     }
 
-    pub fn getPtr(object: *Object) ?*anyopaque {
+    pub fn getPtr(object: *Object) !*anyopaque {
         return switch (object.*) {
-            .unresolved => null,
+            .unresolved => error.UnresolvedObject,
             inline else => |obj| obj,
         };
     }
