@@ -218,6 +218,7 @@ fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) E
             }
         },
         else => {
+            std.log.err("Unknown type: {s} {s}", .{ @typeName(TargetType), @tagName(source.*) });
             return error.NotImplemented;
         },
     }
@@ -268,7 +269,26 @@ fn zigNameToHavokName(allocator: Allocator, str: []const u8) Error![]const u8 {
     return result;
 }
 
-test "loader" {
+test "loader animation" {
+    const allocator = std.testing.allocator;
+
+    const file = try std.fs.cwd().openFile("resources/animation.tag", .{ .mode = .read_only });
+    defer file.close();
+
+    const file_data = try file.readToEndAlloc(allocator, 1 << 20);
+    defer allocator.free(file_data);
+
+    const tf = try TagFile.init(allocator, file_data);
+    defer tf.deinit();
+
+    const loader = try Loader.init(allocator);
+    defer loader.deinit();
+
+    const rlc = try loader.loadFromTagFile(tf);
+    _ = rlc;
+}
+
+test "loader skeleton" {
     const allocator = std.testing.allocator;
 
     const file = try std.fs.cwd().openFile("resources/skeleton.tag", .{ .mode = .read_only });

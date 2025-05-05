@@ -175,14 +175,14 @@ fn parseStructMembers(tf: *TagFile, tfs: *TagFileStruct, class_index: i32, bitma
     }
 
     // Now we process each member
-    for (type_info.members.items, 0..) |*member_info, local_index| {
+    for (type_info.members.items) |*member_info| {
         var value: TagFileValue = undefined;
 
         // We only need to parse the member if it is present
         if (bitmap[member_index.*]) {
             try tf.parseField(&value, member_info);
 
-            try tfs.fields.put(tf.allocator, local_index, value);
+            try tfs.fields.put(tf.allocator, member_index.*, value);
         }
 
         // Keep track of the overall member index
