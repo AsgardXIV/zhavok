@@ -4,10 +4,12 @@ const Allocator = std.mem.Allocator;
 const Bone = @import("Bone.zig");
 const QsTransform = @import("vector_types.zig").QsTransform;
 
+const ReferencedObject = @import("ReferencedObject.zig");
 const Skeleton = @This();
 
 pub const havok_name = "hkaSkeleton";
 
+base: ReferencedObject = .{},
 name: []const u8 = undefined,
 parent_indices: std.ArrayListUnmanaged(i16) = .{},
 bones: std.ArrayListUnmanaged(Bone) = .{},

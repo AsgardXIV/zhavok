@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const VoidType = @import("VoidType.zig");
 const BaseObject = @import("BaseObject.zig");
 const ReferencedObject = @import("ReferencedObject.zig");
 const RootLevelContainer = @import("RootLevelContainer.zig");
@@ -10,6 +11,8 @@ const SkeletonMapper = @import("SkeletonMapper.zig");
 
 pub const Object = union(enum) {
     unresolved: void,
+
+    void_type: *VoidType,
 
     base_object: *BaseObject,
     referenced_object: *ReferencedObject,
@@ -22,9 +25,7 @@ pub const Object = union(enum) {
 
     pub fn deinit(object: *Object, allocator: Allocator) void {
         switch (object.*) {
-            .base_object => |obj| {
-                allocator.destroy(obj);
-            },
+            .void_type => {},
             .referenced_object => |obj| {
                 allocator.destroy(obj);
             },
