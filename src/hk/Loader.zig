@@ -291,7 +291,9 @@ test "loader animation" {
     const rlc = try loader.loadFromTagFile(tf);
 
     const container = try rlc.getObjectByType(AnimationContainer);
-    _ = container;
+
+    const animation = container.animations.items[0];
+    _ = animation;
 }
 
 test "loader skeleton" {
