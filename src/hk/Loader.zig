@@ -197,6 +197,8 @@ fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) E
         .int, .byte => |i| {
             if (tti == .int) {
                 target.* = @intCast(i);
+            } else if (tti == .@"enum") {
+                target.* = @enumFromInt(i);
             } else if (tti == .bool) {
                 target.* = i != 0;
             } else {
