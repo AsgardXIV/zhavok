@@ -66,14 +66,10 @@ pub const Object = union(enum) {
     pub fn getAs(object: *Object, comptime T: type) !*T {
         return switch (object.*) {
             .unresolved => error.UnresolvedObject,
-            inline else => |obj| blk: {
-                if (@TypeOf(obj) == *T) {
-                    break :blk @ptrCast(obj);
-                } else {
-                    std.log.err("Invalid type: expected {s}, got {s}", .{ @typeName(T), @typeName(@TypeOf(obj)) });
-                    break :blk error.InvalidTargetType;
-                }
-            },
+            inline else => |obj| if (@TypeOf(obj) == *T)
+                obj
+            else
+                error.InvalidTargetType,
         };
     }
 };
