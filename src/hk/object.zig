@@ -63,10 +63,17 @@ pub const Object = union(enum) {
         }
     }
 
-    pub fn getPtr(object: *Object) !*anyopaque {
+    pub fn getAs(object: *Object, comptime T: type) !*T {
         return switch (object.*) {
             .unresolved => error.UnresolvedObject,
-            inline else => |obj| obj,
+            inline else => |obj| blk: {
+                if (@TypeOf(obj) == *T) {
+                    break :blk @ptrCast(obj);
+                } else {
+                    std.log.err("Invalid type: expected {s}, got {s}", .{ @typeName(T), @typeName(@TypeOf(obj)) });
+                    break :blk error.InvalidTargetType;
+                }
+            },
         };
     }
 };

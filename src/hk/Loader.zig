@@ -142,6 +142,8 @@ fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!
                                 try loader.populateValue(&temp_value, &a.entries.items[i]);
                                 try target.append(loader.allocator, temp_value);
                             }
+                        } else {
+                            return error.InvalidTargetType;
                         }
                     }
                 },
@@ -181,7 +183,7 @@ fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) E
                 if (tti.pointer.child == Object) {
                     target.* = resolved_object;
                 } else {
-                    target.* = @alignCast(@ptrCast(try resolved_object.getPtr()));
+                    target.* = try resolved_object.getAs(tti.pointer.child);
                 }
             } else {
                 return error.InvalidTargetType;
@@ -273,7 +275,7 @@ fn zigNameToHavokName(allocator: Allocator, str: []const u8) Error![]const u8 {
 
 test "loader animation" {
     const AnimationContainer = @import("AnimationContainer.zig");
-    const SplineCompressedAnimation = @import("SplineCompressedAnimation.zig");
+    //const SplineCompressedAnimation = @import("SplineCompressedAnimation.zig");
 
     const allocator = std.testing.allocator;
 
@@ -295,8 +297,7 @@ test "loader animation" {
 
     const animation = container.animations.items[0];
 
-    const spline_anim = try animation.as(SplineCompressedAnimation);
-    _ = spline_anim;
+    _ = animation;
 }
 
 test "loader skeleton" {

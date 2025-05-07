@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const ReferencedObject = @import("ReferencedObject.zig");
 const Skeleton = @import("Skeleton.zig");
 const Animation = @import("Animation.zig");
+const SplineCompressedAnimation = @import("SplineCompressedAnimation.zig");
 
 const AnimationContainer = @This();
 
@@ -11,7 +12,7 @@ pub const havok_name = "hkaAnimationContainer";
 
 base: ReferencedObject = .{},
 skeletons: std.ArrayListUnmanaged(*Skeleton) = .{},
-animations: std.ArrayListUnmanaged(*Animation) = .{},
+animations: std.ArrayListUnmanaged(*SplineCompressedAnimation) = .{}, // TODO: This won't always be spline compressed
 
 pub fn deinit(ac: *AnimationContainer, allocator: Allocator) void {
     ac.skeletons.deinit(allocator);

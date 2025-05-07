@@ -19,7 +19,8 @@ block_duration: f32 = 0.0,
 block_inverse_duration: f32 = 0.0,
 frame_duration: f32 = 0.0,
 
+block_offsets: std.ArrayListUnmanaged(u32) = .{},
+
 pub fn deinit(anim: *SplineCompressedAnimation, allocator: Allocator) void {
-    _ = anim;
-    _ = allocator;
+    anim.block_offsets.deinit(allocator);
 }
