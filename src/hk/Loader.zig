@@ -133,6 +133,8 @@ fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!
                         if (@typeInfo(TargetType.Slice) == .pointer) {
                             const ChildType = @typeInfo(TargetType.Slice).pointer.child;
 
+                            try target.ensureTotalCapacityPrecise(loader.allocator, a.entries.items.len);
+
                             for (0..a.entries.items.len) |i| {
                                 var temp_value: ChildType = if (@typeInfo(ChildType) == .@"struct")
                                     .{}
@@ -140,7 +142,7 @@ fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!
                                     @as(ChildType, undefined);
 
                                 try loader.populateValue(&temp_value, &a.entries.items[i]);
-                                try target.append(loader.allocator, temp_value);
+                                target.appendAssumeCapacity(temp_value);
                             }
                         } else {
                             return error.InvalidTargetType;
