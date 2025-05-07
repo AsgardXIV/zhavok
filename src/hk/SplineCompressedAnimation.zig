@@ -20,7 +20,19 @@ block_inverse_duration: f32 = 0.0,
 frame_duration: f32 = 0.0,
 
 block_offsets: std.ArrayListUnmanaged(u32) = .{},
+float_block_offsets: std.ArrayListUnmanaged(u32) = .{},
+transform_offsets: std.ArrayListUnmanaged(u32) = .{},
+float_offsets: std.ArrayListUnmanaged(u32) = .{},
+
+data: std.ArrayListUnmanaged(u8) = .{},
+
+endian: i32 = 0,
 
 pub fn deinit(anim: *SplineCompressedAnimation, allocator: Allocator) void {
     anim.block_offsets.deinit(allocator);
+    anim.float_block_offsets.deinit(allocator);
+    anim.transform_offsets.deinit(allocator);
+    anim.float_offsets.deinit(allocator);
+
+    anim.data.deinit(allocator);
 }
