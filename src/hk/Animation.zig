@@ -29,8 +29,5 @@ pub fn deinit(anim: *Animation, allocator: Allocator) void {
 }
 
 pub fn as(anim: *Animation, comptime T: type) !*T {
-    if (anim.type != T.animation_type) {
-        return error.InvalidType;
-    }
-    return @alignCast(@ptrCast(anim));
+    return @alignCast(@fieldParentPtr("base", anim));
 }

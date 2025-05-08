@@ -17,7 +17,7 @@ pub const BlendHint = enum(u8) {
 
 base: ReferencedObject = .{},
 original_skeleton_name: []const u8 = undefined,
-animation: *SplineCompressedAnimation = undefined, // TODO: This won't always be spline compressed
+animation: *Animation = undefined,
 transform_track_to_bone_indices: std.ArrayListUnmanaged(i16) = .{},
 float_track_to_float_slot_indices: std.ArrayListUnmanaged(i16) = .{},
 partition_indices: std.ArrayListUnmanaged(i16) = .{},

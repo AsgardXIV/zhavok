@@ -38,6 +38,6 @@ pub fn getVariantByType(self: *RootLevelContainer, type_name: []const u8) !*Obje
 pub fn getObjectByType(self: *RootLevelContainer, comptime T: type) !*T {
     const type_name = T.havok_name;
     const variant = try self.getVariantByType(type_name);
-    const ptr = try variant.getAs(T);
+    const ptr = try variant.as(T);
     return ptr;
 }

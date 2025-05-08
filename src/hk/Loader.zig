@@ -140,7 +140,7 @@ fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!
                 if (tti.pointer.child == Object) {
                     target.* = resolved_object;
                 } else {
-                    target.* = try resolved_object.getAs(tti.pointer.child);
+                    target.* = try resolved_object.as(tti.pointer.child);
                 }
             } else {
                 return error.InvalidTargetType;
@@ -286,7 +286,7 @@ fn defaultValue(comptime T: type) Error!T {
 
 test "loader animation" {
     const AnimationContainer = @import("AnimationContainer.zig");
-    //const SplineCompressedAnimation = @import("SplineCompressedAnimation.zig");
+    const SplineCompressedAnimation = @import("SplineCompressedAnimation.zig");
 
     const allocator = std.testing.allocator;
 
@@ -308,7 +308,9 @@ test "loader animation" {
 
     const animation = container.animations.items[0];
 
-    _ = animation;
+    const spline_animation = try animation.as(SplineCompressedAnimation);
+
+    _ = spline_animation;
 }
 
 test "loader skeleton" {

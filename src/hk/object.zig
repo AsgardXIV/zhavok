@@ -63,13 +63,37 @@ pub const Object = union(enum) {
         }
     }
 
-    pub fn getAs(object: *Object, comptime T: type) !*T {
+    pub fn as(object: *Object, comptime T: type) !*T {
         return switch (object.*) {
             .unresolved => error.UnresolvedObject,
-            inline else => |obj| if (@TypeOf(obj) == *T)
-                obj
-            else
-                error.InvalidTargetType,
+            inline else => |obj| blk: {
+                const PtrType = @TypeOf(obj);
+                const ObjType = @typeInfo(PtrType).pointer.child;
+
+                if (ObjType == T) {
+                    break :blk obj;
+                } else {
+                    break :blk getTypeFromBases(T, obj) catch error.InvalidTargetType;
+                }
+            },
         };
+    }
+
+    fn getTypeFromBases(comptime WantedType: type, obj: anytype) !*WantedType {
+        const field_name = "base";
+
+        const PtrType = @TypeOf(obj);
+        const ObjType = @typeInfo(PtrType).pointer.child;
+
+        if (@hasField(ObjType, field_name)) {
+            const field = &@field(obj, field_name);
+
+            if (@FieldType(ObjType, field_name) == WantedType) {
+                return field;
+            } else {
+                return getTypeFromBases(WantedType, field);
+            }
+        }
+        return error.InvalidTargetType;
     }
 };
