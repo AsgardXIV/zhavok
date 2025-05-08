@@ -17,6 +17,7 @@ pub const Error = error{
     NotImplemented,
     OutOfMemory,
     UnresolvedObject,
+    NoDefaultValue,
 };
 
 allocator: Allocator,
@@ -118,60 +119,14 @@ fn populateStruct(loader: *Loader, data: anytype, tfs: *TagFileStruct) Error!voi
 
 fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!void {
     const TargetType = @typeInfo(@TypeOf(target)).pointer.child;
-    const SourceType = @typeInfo(@TypeOf(source)).pointer.child;
-
-    _ = SourceType;
 
     const tti = @typeInfo(TargetType);
 
-    switch (tti) {
-        .@"struct" => {
-            switch (source.*) {
-                .@"struct" => |*s| try loader.populateStruct(target, s),
-                .array => |*a| {
-                    if (@hasDecl(TargetType, "Slice")) {
-                        if (@typeInfo(TargetType.Slice) == .pointer) {
-                            const ChildType = @typeInfo(TargetType.Slice).pointer.child;
-
-                            try target.ensureTotalCapacityPrecise(loader.allocator, a.entries.items.len);
-
-                            for (0..a.entries.items.len) |i| {
-                                var temp_value: ChildType = if (@typeInfo(ChildType) == .@"struct")
-                                    .{}
-                                else
-                                    @as(ChildType, undefined);
-
-                                try loader.populateValue(&temp_value, &a.entries.items[i]);
-                                target.appendAssumeCapacity(temp_value);
-                            }
-                        } else {
-                            return error.InvalidTargetType;
-                        }
-                    }
-                },
-                else => try loader.populateBasicValue(target, source),
-            }
-        },
-        .optional => |*o| {
-            var temp_value: o.child = if (@typeInfo(o.child) == .@"struct")
-                .{}
-            else
-                @as(o.child, undefined);
-
-            try loader.populateValue(&temp_value, source);
-
-            target.* = temp_value;
-        },
-        else => {
-            try loader.populateBasicValue(target, source);
-        },
+    if (tti == .optional) {
+        target.* = defaultValue(TargetType);
+        try loader.populateValue(target.?, source);
+        return;
     }
-}
-
-fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!void {
-    const TargetType = @typeInfo(@TypeOf(target)).pointer.child;
-
-    const tti = @typeInfo(TargetType);
 
     switch (source.*) {
         .object => |*o| {
@@ -187,6 +142,48 @@ fn populateBasicValue(loader: *Loader, target: anytype, source: *TagFileValue) E
                 } else {
                     target.* = try resolved_object.getAs(tti.pointer.child);
                 }
+            } else {
+                return error.InvalidTargetType;
+            }
+        },
+        .@"struct" => |*s| {
+            if (tti == .@"struct") {
+                try loader.populateStruct(target, s);
+            } else {
+                return error.InvalidTargetType;
+            }
+        },
+        .array => |*a| {
+            if (tti == .@"struct") {
+                if (@hasDecl(TargetType, "Slice")) {
+                    if (@typeInfo(TargetType.Slice) == .pointer) {
+                        const ChildType = @typeInfo(TargetType.Slice).pointer.child;
+
+                        try target.ensureTotalCapacityPrecise(loader.allocator, a.entries.items.len);
+
+                        for (0..a.entries.items.len) |i| {
+                            var temp_value = try defaultValue(ChildType);
+                            try loader.populateValue(&temp_value, &a.entries.items[i]);
+                            target.appendAssumeCapacity(temp_value);
+                        }
+                    } else {
+                        return error.InvalidTargetType;
+                    }
+                } else {
+                    return error.InvalidTargetType;
+                }
+            } else if (tti == .pointer and tti.pointer.size == .slice) {
+                const ChildType = tti.pointer.child;
+
+                const values = try loader.allocator.alloc(ChildType, a.entries.items.len);
+
+                for (0..a.entries.items.len) |i| {
+                    var temp_value = try defaultValue(ChildType);
+                    try loader.populateValue(&temp_value, &a.entries.items[i]);
+                    values[i] = temp_value;
+                }
+
+                target.* = values;
             } else {
                 return error.InvalidTargetType;
             }
@@ -273,6 +270,18 @@ fn zigNameToHavokName(allocator: Allocator, str: []const u8) Error![]const u8 {
     const result = try allocator.dupe(u8, buffer.items);
 
     return result;
+}
+
+fn defaultValue(comptime T: type) Error!T {
+    const ti = @typeInfo(T);
+    return switch (ti) {
+        .int => @intCast(0),
+        .float => @floatCast(0.0),
+        .bool => false,
+        .@"struct" => .{},
+        .pointer => undefined,
+        else => return error.NoDefaultValue,
+    };
 }
 
 test "loader animation" {
