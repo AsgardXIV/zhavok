@@ -317,6 +317,7 @@ test "loader animation" {
 
 test "loader skeleton" {
     const AnimationContainer = @import("AnimationContainer.zig");
+    const SkeletonMapper = @import("SkeletonMapper.zig");
 
     const allocator = std.testing.allocator;
 
@@ -338,4 +339,7 @@ test "loader skeleton" {
 
     const skeleton = try container.findSkeletonByName("skeleton");
     _ = skeleton;
+
+    const mapper = try rlc.getObjectByType(SkeletonMapper);
+    _ = mapper;
 }
