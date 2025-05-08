@@ -19,12 +19,12 @@ block_duration: f32 = 0.0,
 block_inverse_duration: f32 = 0.0,
 frame_duration: f32 = 0.0,
 
-block_offsets: []u32 = undefined,
-float_block_offsets: []u32 = undefined,
-transform_offsets: []u32 = undefined,
-float_offsets: []u32 = undefined,
+block_offsets: []u32 = &[_]u32{},
+float_block_offsets: []u32 = &[_]u32{},
+transform_offsets: []u32 = &[_]u32{},
+float_offsets: []u32 = &[_]u32{},
 
-data: []u8 = undefined,
+data: []u8 = &[_]u8{},
 
 endian: i32 = 0,
 

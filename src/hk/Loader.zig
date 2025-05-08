@@ -160,6 +160,7 @@ fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!
                         const ChildType = @typeInfo(TargetType.Slice).pointer.child;
 
                         try target.ensureTotalCapacityPrecise(loader.allocator, a.entries.items.len);
+                        errdefer target.deinit(loader.allocator);
 
                         for (0..a.entries.items.len) |i| {
                             var temp_value = try defaultValue(ChildType);
@@ -176,6 +177,7 @@ fn populateValue(loader: *Loader, target: anytype, source: *TagFileValue) Error!
                 const ChildType = tti.pointer.child;
 
                 const values = try loader.allocator.alloc(ChildType, a.entries.items.len);
+                errdefer loader.allocator.free(values);
 
                 for (0..a.entries.items.len) |i| {
                     var temp_value = try defaultValue(ChildType);
