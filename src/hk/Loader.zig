@@ -290,7 +290,7 @@ test "loader animation" {
 
     const allocator = std.testing.allocator;
 
-    const file = try std.fs.cwd().openFile("resources/animation.tag", .{ .mode = .read_only });
+    const file = try std.fs.cwd().openFile("resources/animation.hkt", .{ .mode = .read_only });
     defer file.close();
 
     const file_data = try file.readToEndAlloc(allocator, 1 << 20);
@@ -318,7 +318,7 @@ test "loader skeleton" {
 
     const allocator = std.testing.allocator;
 
-    const file = try std.fs.cwd().openFile("resources/skeleton.tag", .{ .mode = .read_only });
+    const file = try std.fs.cwd().openFile("resources/skeleton.hkt", .{ .mode = .read_only });
     defer file.close();
 
     const file_data = try file.readToEndAlloc(allocator, 1 << 20);
