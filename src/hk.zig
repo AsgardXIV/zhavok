@@ -14,4 +14,6 @@ pub const SkeletonMapper = @import("hk/SkeletonMapper.zig");
 pub const SkeletonMapperData = @import("hk/SkeletonMapperData.zig");
 pub const SplineCompressedAnimation = @import("hk/SplineCompressedAnimation.zig");
 
-pub const vector_types = @import("hk/vector_types.zig");
+pub const QsTransform = @import("hk/vector_types.zig").QsTransform;
+pub const Quaternion = @import("hk/vector_types.zig").Quaternion;
+pub const Vector4 = @import("hk/vector_types.zig").Vector4;
